@@ -1,0 +1,36 @@
+version: '3.3'
+
+services:
+  airflow-webserver:
+    image: apache/airflow:2.9.2
+    environment:
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@192.168.56.10:5432/airflow
+      AIRFLOW__CORE__FERNET_KEY: "a0eWz3OiY0xDF2qL5LLaCqzCFmQp6ZPjH7sbdCWix3Y="
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__WEBSERVER__WORKERS: "1"
+      AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT: "300"
+    ports:
+      - "8080:8080"
+    command: >
+      bash -c "
+      airflow db upgrade &&
+      airflow webserver
+      "
+    volumes:
+      - ./dags:/opt/airflow/dags
+    restart: always
+    user: "0:0"
+
+  airflow-scheduler:
+    image: apache/airflow:2.9.2
+    environment:
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@192.168.56.10:5432/airflow
+      AIRFLOW__CORE__FERNET_KEY: "a0eWz3OiY0xDF2qL5LLaCqzCFmQp6ZPjH7sbdCWix3Y="
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+    command: "airflow scheduler"
+    volumes:
+      - ./dags:/opt/airflow/dags
+    restart: always
+    user: "0:0"

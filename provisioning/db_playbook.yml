@@ -1,0 +1,61 @@
+---
+- name: Configure PostgreSQL for Airflow
+  hosts: localhost
+  connection: local
+  become: true
+
+  vars:
+    postgres_version: "12"
+    postgres_conf_dir: "/etc/postgresql/{{ postgres_version }}/main"
+    airflow_db_name: "airflow"
+    airflow_db_user: "airflow"
+    airflow_db_password: "airflow"
+    airflow_vm_subnet: "192.168.56.0/24"
+
+  tasks:
+    - name: Ensure PostgreSQL service is enabled and started
+      service:
+        name: postgresql
+        state: started
+        enabled: yes
+
+    - name: Allow PostgreSQL to listen on all addresses
+      lineinfile:
+        path: "{{ postgres_conf_dir }}/postgresql.conf"
+        regexp: '^#?\s*listen_addresses\s*='
+        line: "listen_addresses = '*'"
+      notify: Restart PostgreSQL
+
+    - name: Allow Airflow VM subnet to connect (pg_hba.conf)
+      lineinfile:
+        path: "{{ postgres_conf_dir }}/pg_hba.conf"
+        insertafter: '^#.*IPv4 local connections:'
+        line: "host    {{ airflow_db_name }}    {{ airflow_db_user }}    {{ airflow_vm_subnet }}    md5"
+      notify: Reload PostgreSQL
+
+    - name: Create airflow database user
+      become_user: postgres
+      shell: |
+        psql -tc "SELECT 1 FROM pg_roles WHERE rolname = '{{ airflow_db_user }}'" | grep -q 1 || \
+        psql -c "CREATE ROLE {{ airflow_db_user }} LOGIN PASSWORD '{{ airflow_db_password }}';"
+      args:
+        warn: false
+
+    - name: Create airflow database
+      become_user: postgres
+      shell: |
+        psql -tc "SELECT 1 FROM pg_database WHERE datname = '{{ airflow_db_name }}'" | grep -q 1 || \
+        psql -c "CREATE DATABASE {{ airflow_db_name }} OWNER {{ airflow_db_user }};"
+      args:
+        warn: false
+
+  handlers:
+    - name: Restart PostgreSQL
+      service:
+        name: postgresql
+        state: restarted
+
+    - name: Reload PostgreSQL
+      service:
+        name: postgresql
+        state: reloaded

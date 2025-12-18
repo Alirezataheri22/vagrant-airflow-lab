@@ -1,0 +1,56 @@
+---
+- name: Configure Airflow with Docker
+  hosts: localhost
+  connection: local
+  become: true
+
+  vars:
+    airflow_project_dir: /opt/airflow
+
+  tasks:
+    - name: Ensure Docker service is running
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Create Airflow project directory and dags folder
+      file:
+        path: "{{ airflow_project_dir }}/dags"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+        recurse: yes
+
+    - name: Copy docker-compose file
+      copy:
+        src: /vagrant/airflow/docker-compose.yml
+        dest: "{{ airflow_project_dir }}/docker-compose.yml"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Copy example DAGs
+      copy:
+        src: /vagrant/airflow/dags/
+        dest: "{{ airflow_project_dir }}/dags/"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Pull Airflow image
+      command: docker pull apache/airflow:2.9.2
+
+    - name: Run Airflow DB init (migrations and admin user)
+      command: docker-compose -f docker-compose.yml run --rm airflow-init
+      args:
+        chdir: "{{ airflow_project_dir }}"
+      environment:
+        COMPOSE_HTTP_TIMEOUT: "600"
+      ignore_errors: true   # <-- don't fail vagrant if this is slow or already done
+
+    - name: Start Airflow webserver and scheduler
+      command: docker-compose -f docker-compose.yml up -d airflow-webserver airflow-scheduler
+      args:
+        chdir: "{{ airflow_project_dir }}"
